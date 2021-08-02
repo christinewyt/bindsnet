@@ -143,7 +143,10 @@ def plot_spikes(
         for ax in axes:
             ax.set_aspect("auto")
 
-        plt.setp(axes, xticks=[], xlabel="Simulation time", ylabel="Neuron index")
+        if time: 
+            plt.setp(axes, xlim=[time[0], time[1]], xticks=[], xlabel="Simulation time", ylabel="Neuron index")
+        else:
+            plt.setp(axes, xticks=[], xlabel="Simulation time", ylabel="Neuron index")
         plt.tight_layout()
     else:
         for i, datum in enumerate(spikes.items()):
@@ -679,7 +682,10 @@ def plot_voltages(
         if plot_type == "color":
             plt.setp(axes, xlabel="Simulation time", ylabel="Neuron index")
         elif plot_type == "line":
-            plt.setp(axes, xlabel="Simulation time", ylabel="Voltage")
+            if time: 
+                plt.setp(axes, xlim=[time[0], time[1]], xlabel="Simulation time", ylabel="Voltage")
+            else:
+                plt.setp(axes, xlabel="Simulation time", ylabel="Voltage")
 
         plt.tight_layout()
 
