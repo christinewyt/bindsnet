@@ -626,10 +626,9 @@ def plot_voltages(
                         )
                     )
                 
-                if time: 
-                    plt.xlim(time[0], time[1])
 
                 args = (v[0], n_neurons[v[0]][0], n_neurons[v[0]][1], time[0], time[1])
+                plt.xlim(time[0], time[1])
                 plt.title("%s voltages for neurons (%d - %d) from t = %d to %d " % args)
                 plt.xlabel("Time (ms)")
 
@@ -674,8 +673,7 @@ def plot_voltages(
                             cmap=cmap,
                         )
                     )
-                if time: 
-                    plt.xlim(time[0], time[1])
+            
                 args = (v[0], n_neurons[v[0]][0], n_neurons[v[0]][1], time[0], time[1])
                 axes[i].set_title(
                     "%s voltages for neurons (%d - %d) from t = %d to %d " % args
