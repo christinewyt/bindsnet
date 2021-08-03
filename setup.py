@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="BindsNET",
-    version="0.2.9",
+    #version="0.2.9",
     description="Spiking neural networks for ML in Python",
     license="AGPL-3.0",
     long_description=long_description,
@@ -34,3 +34,5 @@ setup(
         "pandas>=0.23.4",
     ],
 )
+
+print("Pip private BindsNET completed.")
