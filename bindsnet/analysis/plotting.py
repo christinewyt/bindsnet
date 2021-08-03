@@ -718,9 +718,7 @@ def plot_voltages(
                         cmap=cmap,
                     )
                 args = (v[0], n_neurons[v[0]][0], n_neurons[v[0]][1], time[0], time[1])
-                axes.set_title(
-                    "%s voltages for neurons (%d - %d) from t = %d to %d " % args
-                )
+                #axes.set_title("%s voltages for neurons (%d - %d) from t = %d to %d " % args)
                 axes.set_aspect("auto")
 
         else:
