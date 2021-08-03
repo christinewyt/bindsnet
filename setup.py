@@ -10,7 +10,8 @@ setup(
     license="AGPL-3.0",
     long_description=long_description,
     long_description_content_type="text/markdown",  # This is important!
-    url="http://github.com/Hananel-Hazan/bindsnet",
+    #url="http://github.com/Hananel-Hazan/bindsnet",
+    url="https://github.com/christinewyt/bindsnet", 
     author="Hananel Hazan, Daniel Saunders, Darpan Sanghavi, Hassaan Khan",
     author_email="hananel@hazan.org.il",
     packages=find_packages(),
