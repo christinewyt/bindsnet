@@ -112,7 +112,13 @@ class AbstractConnection(ABC, Module):
         Contains resetting logic for the connection.
         """
         pass
-
+    
+    def get_parameters(self) -> None:
+        """
+        print parameters of connection
+        """
+        print("source:", self.source, " target:", self.target, " learning rate nu:", self.nu)
+        print("Update rule:", self.update_rule)
 
 class Connection(AbstractConnection):
     # language=rst
@@ -242,6 +248,12 @@ class Connection(AbstractConnection):
         """
         super().reset_state_variables()
 
+    def get_parameters(self) -> None:
+        # language=rst
+        """
+        Get the parameters of connection.
+        """
+        super().get_parameters()
 
 class Conv2dConnection(AbstractConnection):
     # language=rst
