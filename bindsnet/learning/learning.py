@@ -90,6 +90,18 @@ class LearningRule(ABC):
         ) and not isinstance(self, NoOp):
             self.connection.w.clamp_(self.connection.wmin, self.connection.wmax)
 
+    def update_parameter(self, **kwargs) -> None:
+        # language=rst
+        """
+        Update the parameters for learning rule.
+        """
+        nu_new = kwargs.get("nu", None)
+        if nu_new is not None:
+            print("Original learning rate:", self.nu)
+            self.nu = nu_new
+            print("New learning rate:", self.nu)
+
+
 
 class NoOp(LearningRule):
     # language=rst

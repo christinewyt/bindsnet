@@ -52,7 +52,7 @@ class AbstractConnection(ABC, Module):
         self.source = source
         self.target = target
 
-        # self.nu = nu
+        self.nu = nu
         self.weight_decay = weight_decay
         self.reduction = reduction
 
@@ -119,6 +119,15 @@ class AbstractConnection(ABC, Module):
         """
         print("source:", self.source, " target:", self.target, " learning rate nu:", self.nu)
         print("Update rule:", self.update_rule)
+    
+    def set_weight(self, **kwargs) -> None:
+        """
+        Set weight for the connection.
+        """
+        w_new = kwargs.get("w", None)
+        self.w = w_new
+
+
 
 class Connection(AbstractConnection):
     # language=rst

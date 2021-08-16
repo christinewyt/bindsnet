@@ -290,3 +290,4 @@ class NetworkMonitor(AbstractMonitor):
                         self.recording[c][v] = torch.zeros(
                             self.time, *getattr(self.network.layers[c], v).size()
                         )
+

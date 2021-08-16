@@ -586,6 +586,7 @@ class Network(torch.nn.Module):
                 if t>=t_dopamin_start and Flag_spike==False:
                     if l=='Ae':
                         current_inputs[l] += ex_dopamin
+                    ####################
                     # Change STDP learning rate to nu
 
 

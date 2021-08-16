@@ -268,7 +268,7 @@ class DiehlAndCook2015v2(Network):
             reset=-60.0,
             thresh=-52.0,
             refrac=5,
-            tc_decay=100.0,
+            tc_decay=20.0,
             tc_trace=20.0,
             theta_plus=theta_plus,
             tc_theta_decay=tc_theta_decay,
