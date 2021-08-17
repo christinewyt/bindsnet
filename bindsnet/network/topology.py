@@ -119,13 +119,13 @@ class AbstractConnection(ABC, Module):
         """
         print("source:", self.source, " target:", self.target, " learning rate nu:", self.nu)
         print("Update rule:", self.update_rule)
-    
+
+    @abstractmethod
     def set_weight(self, **kwargs) -> None:
         """
         Set weight for the connection.
         """
-        w_new = kwargs.get("w", None)
-        self.w = w_new
+        pass
 
 
 
@@ -263,6 +263,13 @@ class Connection(AbstractConnection):
         Get the parameters of connection.
         """
         super().get_parameters()
+
+    def set_weight(self, **kwargs) -> None:
+        """
+        Set weights of connections
+        """
+        w_new = kwargs.get("w", None)
+        self.w = w_new
 
 class Conv2dConnection(AbstractConnection):
     # language=rst
