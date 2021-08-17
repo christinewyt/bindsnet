@@ -269,7 +269,7 @@ class Connection(AbstractConnection):
         Set weights of connections
         """
         w_new = kwargs.get("w", None)
-        self.w = w_new
+        self.w = Parameter(w_new, requires_grad=False)
 
 class Conv2dConnection(AbstractConnection):
     # language=rst
