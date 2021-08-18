@@ -259,6 +259,7 @@ class Connection(AbstractConnection):
         """
         if self.norm_L2 is not None:
             w_norm = torch.sqrt((self.w**2).sum(0).unsqueeze(0))
+            w_norm[w_norm == 0] = 1.0
             self.w *= self.norm_L2 / w_norm
 
     def reset_state_variables(self) -> None:
