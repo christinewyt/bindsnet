@@ -169,7 +169,7 @@ class DiehlAndCook2015(Network):
         )
 
         # Connections
-        w = 0.3 * torch.rand(self.n_inpt, self.n_neurons)
+        w = 0.1 * torch.rand(self.n_inpt, self.n_neurons)
         input_exc_conn = Connection(
             source=input_layer,
             target=exc_layer,

@@ -62,6 +62,7 @@ class AbstractConnection(ABC, Module):
         self.wmin = kwargs.get("wmin", -np.inf)
         self.wmax = kwargs.get("wmax", np.inf)
         self.norm = kwargs.get("norm", None)
+        self.norm_L2 = kwargs.get("norm_L2", None)
         self.decay = kwargs.get("decay", None)
 
         if self.update_rule is None:
@@ -249,6 +250,16 @@ class Connection(AbstractConnection):
             w_abs_sum = self.w.abs().sum(0).unsqueeze(0)
             w_abs_sum[w_abs_sum == 0] = 1.0
             self.w *= self.norm / w_abs_sum
+
+    def normalize_L2(self) -> None:
+        # language=rst
+        """
+        L2 normalization of weights so that each target neuron has the same normalized connection weights
+        equal to ``self.norm_L2``.
+        """
+        if self.norm_L2 is not None:
+            w_norm = torch.sqrt((self.w**2).sum(0).unsqueeze(0))
+            self.w *= self.norm_L2 / w_norm
 
     def reset_state_variables(self) -> None:
         # language=rst
