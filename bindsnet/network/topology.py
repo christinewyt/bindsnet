@@ -262,6 +262,10 @@ class Connection(AbstractConnection):
             w_norm[w_norm == 0] = 1.0
             self.w *= self.norm_L2 / w_norm
 
+        if self.wmin != -np.inf or self.wmax != np.inf:
+            w = torch.clamp(torch.as_tensor(w), self.wmin, self.wmax)
+        
+
     def reset_state_variables(self) -> None:
         # language=rst
         """
