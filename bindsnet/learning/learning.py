@@ -397,6 +397,68 @@ class WeightDependentPostPre(LearningRule):
 
         super().update()
 
+class WeightDependentDopamin(LearningRule):
+    # language=rst
+    """
+    STDP rule involving both pre- and post-synaptic spiking activity. The post-synaptic
+    update is positive and the pre- synaptic update is negative, and both are dependent
+    on the magnitude of the synaptic weights.
+    """
+
+    def __init__(
+        self,
+        connection: AbstractConnection,
+        nu: Optional[Union[float, Sequence[float]]] = None,
+        reduction: Optional[callable] = None,
+        weight_decay: float = 0.0,
+        **kwargs,
+    ) -> None:
+        # language=rst
+        """
+        Constructor for ``WeightDependentPostPre`` learning rule.
+
+        :param connection: An ``AbstractConnection`` object whose weights the
+            ``WeightDependentPostPre`` learning rule will modify.
+        :param nu: Single or pair of learning rates for pre- and post-synaptic events.
+        :param reduction: Method for reducing parameter updates along the batch
+            dimension.
+        :param weight_decay: Coefficient controlling rate of decay of the weights each iteration.
+        """
+        super().__init__(
+            connection=connection,
+            nu=nu,
+            reduction=reduction,
+            weight_decay=weight_decay,
+            **kwargs,
+        )
+
+        self.wmin = connection.wmin
+
+        if isinstance(connection, (Connection, LocalConnection)):
+            self.update = self._connection_update
+        elif isinstance(connection, Conv2dConnection):
+            self.update = self._conv2d_connection_update
+        else:
+            raise NotImplementedError(
+                "This learning rule is not supported for this Connection type."
+            )
+
+    def _connection_update(self, **kwargs) -> None:
+        # language=rst
+        batch_size = self.source.batch_size
+        update = 0
+
+        # Post-synaptic update.
+        # Reduce dopamin to exc neurons every time exc neuron fires 
+        if self.nu[1]:
+            source_x = 1.0*torch.ones_like(self.source.x.view(batch_size, -1).unsqueeze(2))
+            target_s = self.target.s.view(batch_size, -1).unsqueeze(1).float()
+            self.connection.w += self.nu[1]*self.connection.w*self.reduction(torch.bmm(source_x, target_s), dim=0)
+            del source_x, target_s
+
+        self.connection.w += update
+
+        super().update()
 
 class Hebbian(LearningRule):
     # language=rst

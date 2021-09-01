@@ -763,3 +763,24 @@ def plot_voltages(
         plt.tight_layout()
 
     return ims, axes
+
+
+def plot_dop_activities(dopamin_activities, interval, num_sample_digit, ims=None, axes=None, figsize: Tuple[float, float] = (8.0, 3.0),):
+  if not axes:
+            _, axes = plt.subplots(figsize=figsize)
+  else:
+            axes.clear()
+
+  dopamin_activities_copy = dopamin_activities.reshape(-1, interval)
+  k = int(len(dopamin_activities)/interval)
+  axes.plot(
+      [interval * n for n in range(k)],
+      torch.sum(dopamin_activities_copy, axis=1),
+  )
+
+  axes.set_ylim([0, interval])
+  axes.set_title("Dopamin activities")
+  axes.set_xlabel("No. of examples")
+  axes.set_ylabel("Accuracy")
+  axes.set_xticks(range(0, k*interval, num_sample_digit))
+  axes.legend()
