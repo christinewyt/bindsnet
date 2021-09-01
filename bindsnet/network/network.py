@@ -758,10 +758,10 @@ class Network(torch.nn.Module):
                   if torch.min(Flag_spike)>0:
                       spikes_exc = getattr(self.monitors['Ae_spikes'].obj, "s").squeeze()
                       idx = torch.where(spikes_exc!=False)[0]
+                      print(idx, Flag_spike.shape)
                       if len(idx)>0:
                           #print("exc spike time:", t, " neuron:", idx)
                           #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
-                          print(idx, Flag_spike.shape)
                           Flag_spike[idx] -= 1 
 
                 # Check whether dopamin neuron fire or not
