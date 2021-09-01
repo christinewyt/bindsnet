@@ -656,7 +656,7 @@ class DiehlAndCook2015_withDopamin(Network):
             nu=nu,
             reduction=reduction,
             wmin=0.0,
-            wmax=0.3,
+            wmax=wmax,
             **kwargs
         )
         w = self.exc * torch.diag(torch.ones(self.n_neurons))
