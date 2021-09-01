@@ -635,3 +635,202 @@ class Network(torch.nn.Module):
         # Re-normalize connections.
         for c in self.connections:
             self.connections[c].normalize()
+
+
+      def run_dopamin(
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, L2_norm=True, **kwargs
+    ) -> None:
+        # language=rst
+        # Check input type
+        assert type(inputs) == dict, (
+            "'inputs' must be a dict of names of layers "
+            + f"(str) and relevant input tensors. Got {type(inputs).__name__} instead."
+        )
+        # Parse keyword arguments.
+        clamps = kwargs.get("clamp", {})
+        unclamps = kwargs.get("unclamp", {})
+        masks = kwargs.get("masks", {})
+        injects_v = kwargs.get("injects_v", {})
+        if L2_norm == True:
+          norm_L2 = kwargs.get("norm_L2", {})
+        else:
+          norm_L1 = kwargs.get("norm_L1", {})
+        norm_L2_dopamin = kwargs.get("norm_L2_dopamin", {})
+        n_dopamin_spike = kwargs.get("n_dopamin_spike", {})
+        nu_original = kwargs.get("nu_original", {})
+        nu_enhanced = kwargs.get("nu_enhanced", {})
+
+        # Compute reward.
+        if self.reward_fn is not None:
+            kwargs["reward"] = self.reward_fn.compute(**kwargs)
+
+        # Dynamic setting of batch size.
+        if inputs != {}:
+            for key in inputs:
+                # goal shape is [time, batch, n_0, ...]
+                if len(inputs[key].size()) == 1:
+                    # current shape is [n_0, ...]
+                    # unsqueeze twice to make [1, 1, n_0, ...]
+                    inputs[key] = inputs[key].unsqueeze(0).unsqueeze(0)
+                elif len(inputs[key].size()) == 2:
+                    # current shape is [time, n_0, ...]
+                    # unsqueeze dim 1 so that we have
+                    # [time, 1, n_0, ...]
+                    inputs[key] = inputs[key].unsqueeze(1)
+
+            for key in inputs:
+                # batch dimension is 1, grab this and use for batch size
+                if inputs[key].size(1) != self.batch_size:
+                    self.batch_size = inputs[key].size(1)
+
+                    for l in self.layers:
+                        self.layers[l].set_batch_size(self.batch_size)
+
+                    for m in self.monitors:
+                        self.monitors[m].reset_state_variables()
+
+                break
+
+        # Mark the number of spikes excitatory neurons have emitted
+        Flag_spike = torch.tensor([n_dopamin_spike], device = self._get_inputs(layers=['Ae'])['Ae'].device)
+        # Mark whether dopamin signal has been applied
+        Flag_dopamin = False
+        Flag_learning_rate = False
+        t_spike_last = -100
+
+        # Effective number of timesteps.
+        timesteps = int(time / self.dt)
+
+        Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
+        setattr(Update_rule, 'nu', nu_original)
+
+        # Simulate network activity for `time` timesteps.
+        for t in range(timesteps):
+            # Get input to all layers (synchronous mode).
+            current_inputs = {}
+            if not one_step:
+                current_inputs.update(self._get_inputs())
+
+            # Turn off dopamin exc input and reset learning rate to the original value
+            if torch.min(Flag_spike)==0:
+              Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
+              setattr(Update_rule, 'nu', nu_original)
+              #print("At time:", t, "; Change learning rule from:", nu_dopamin, " to:", getattr(Update_rule, 'nu'))
+              #print("************************")
+              Flag_dopamin=False
+              Flag_learning_rate = False
+              #print("End simulation @", t)
+              break
+
+            for l in self.layers:
+                # Update each layer of nodes.
+                if l in inputs:
+                    if l in current_inputs:
+                        current_inputs[l] += inputs[l][t]
+                    else:
+                        current_inputs[l] = inputs[l][t]
+
+                if one_step:
+                    # Get input to this layer (one-step mode).
+                    current_inputs.update(self._get_inputs(layers=[l]))
+                  
+                # If dopamin neuron spikes, increase learning rate
+                if Flag_dopamin==True and torch.min(Flag_spike)>0 and Flag_learning_rate==False:
+                    if l=='Ae':
+                      # Change STDP learning rate to nu
+                      Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
+                      nu_old = getattr(Update_rule, 'nu') 
+                      setattr(Update_rule, 'nu', nu_enhanced)
+                      #print("At time:", t, "; Change learning rule from:", nu_old, " to:", getattr(Update_rule, 'nu'))
+                      Flag_learning_rate=True
+                
+                # Send dopamin inputs to excitatory neurons until one of the neuron spikes
+                if l=='Ae' and torch.min(Flag_spike)==n_dopamin_spike and Flag_dopamin==True:
+                  current_inputs[l] += self.connections[('Dopamin', 'Ae')].w 
+
+                if l in current_inputs:
+                    self.layers[l].forward(x=current_inputs[l])
+                else:
+                    self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
+
+                if l=='Ae':
+                  # Get the spiking information
+                  if torch.min(Flag_spike)>0:
+                      spikes_exc = getattr(self.monitors['Ae_spikes'].obj, "s").squeeze()
+                      idx = torch.where(spikes_exc!=False)[0]
+                      if len(idx)>0:
+                          #print("exc spike time:", t, " neuron:", idx)
+                          #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
+                          Flag_spike[0] -= 1 
+
+                # Check whether dopamin neuron fire or not
+                if l=='Dopamin':
+                  # Get the spiking information
+                  spikes_dop = getattr(self.monitors['Dopamin_spikes'].obj, "s").squeeze()
+                  if spikes_dop==True and t>10:
+                      #print("Dopamin spike time:", t)
+                      #print(self.connections[('Dopamin', 'Ae')].w[100], self.connections[('Dopamin', 'Ae')].w.mean())
+                      Flag_dopamin = True
+
+                # Clamp neurons to spike.
+                clamp = clamps.get(l, None)
+                if clamp is not None:
+                    if clamp.ndimension() == 1:
+                        self.layers[l].s[:, clamp] = 1
+                    else:
+                        self.layers[l].s[:, clamp[t]] = 1
+
+                # Clamp neurons not to spike.
+                unclamp = unclamps.get(l, None)
+                if unclamp is not None:
+                    if unclamp.ndimension() == 1:
+                        self.layers[l].s[:, unclamp] = 0
+                    else:
+                        self.layers[l].s[:, unclamp[t]] = 0
+
+                # Inject voltage to neurons.
+                inject_v = injects_v.get(l, None)
+                if inject_v is not None:
+                    if inject_v.ndimension() == 1:
+                        self.layers[l].v += inject_v
+                    else:
+                        self.layers[l].v += inject_v[t]
+
+            # Run synapse updates.
+            for c in self.connections:
+                self.connections[c].update(
+                    mask=masks.get(c, None), learning=self.learning, **kwargs
+                )
+
+            # # Get input to all layers.
+            # current_inputs.update(self._get_inputs())
+
+            # Record state variables of interest.
+            for m in self.monitors:
+                self.monitors[m].record()
+
+        # Re-normalize connections.
+        for c in self.connections:
+          source, target = c
+          if source == "X":
+            if L2_norm == True:
+              w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
+              w_norm[w_norm == 0] = 1.0
+              self.connections[c].w *= norm_L2 / w_norm
+              self.connections[c].w[self.connections[c].w>1.0] = 1.0
+            else:
+              w_sum = self.connections[c].w.sum(0)
+              self.connections[c].w *= norm_L1 / w_sum
+              self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              #self.connections[c].normalize()
+          
+          if source == "Dopamin":
+            if L2_norm == True:
+              w_norm = torch.sqrt((self.connections[c].w**2).sum())
+              #print("w_max before scale:", self.connections[c].w.max())
+              self.connections[c].w *=norm_L2_dopamin / w_norm
+              w_norm = torch.sqrt((self.connections[c].w**2).sum())
+              #print("w_max after scale:", self.connections[c].w.max())
+            else:
+              w_sum = (self.connections[c].w).sum()
+              self.connections[c].w *= norm_L2_dopamin/w_sum
