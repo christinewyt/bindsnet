@@ -639,7 +639,7 @@ class Network(torch.nn.Module):
 
       def run_dopamin(
         self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, L2_norm=True, **kwargs
-    ) -> None:
+        ) -> None:
         # language=rst
         # Check input type
         assert type(inputs) == dict, (
