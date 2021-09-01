@@ -819,12 +819,12 @@ class Network(torch.nn.Module):
             if L2_norm == True:
               w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
               neuron_idx = torch.argmin(Flag_spike)
-              print("Before norm:", neuron_idx, w_norm[0][neuron_idx])
+              print("Before norm:", w_norm[0][neuron_idx], self.connections[c].w.max())
               w_norm[w_norm == 0] = 1.0
               self.connections[c].w *= norm_L2 / w_norm
               self.connections[c].w[self.connections[c].w>1.0] = 1.0
               w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
-              print("After norm:", w_norm[0][neuron_idx])
+              print("After norm:", w_norm[0][neuron_idx], self.connections[c].w.max())
             else:
               w_sum = self.connections[c].w.sum(0)
               self.connections[c].w *= norm_L1 / w_sum
