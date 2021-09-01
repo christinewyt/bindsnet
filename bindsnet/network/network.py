@@ -693,6 +693,7 @@ class Network(torch.nn.Module):
 
         # Mark the number of spikes excitatory neurons have emitted
         Flag_spike = torch.tensor([n_dopamin_spike], device = self._get_inputs(layers=['Ae'])['Ae'].device)
+        print(Flag_spike.shape)
         # Mark whether dopamin signal has been applied
         Flag_dopamin = False
         Flag_learning_rate = False
@@ -758,10 +759,10 @@ class Network(torch.nn.Module):
                   if torch.min(Flag_spike)>0:
                       spikes_exc = getattr(self.monitors['Ae_spikes'].obj, "s").squeeze()
                       idx = torch.where(spikes_exc!=False)[0]
-                      print(idx, Flag_spike.shape)
                       if len(idx)>0:
                           #print("exc spike time:", t, " neuron:", idx)
                           #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
+                          print("idx", idx)
                           Flag_spike[idx] -= 1 
 
                 # Check whether dopamin neuron fire or not
