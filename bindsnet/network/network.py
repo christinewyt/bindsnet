@@ -761,7 +761,7 @@ class Network(torch.nn.Module):
                       if len(idx)>0:
                           #print("exc spike time:", t, " neuron:", idx)
                           #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
-                          Flag_spike[0] -= 1 
+                          Flag_spike[idx] -= 1 
 
                 # Check whether dopamin neuron fire or not
                 if l=='Dopamin':
