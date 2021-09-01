@@ -554,6 +554,7 @@ class DiehlAndCook2015_withDopamin(Network):
         inh: float = 17.5,
         exc_dopamin: float = 100.0,
         dopamin_exc: float = 20.0, 
+        exc_threshold: float = 14.0, 
         dt: float = 1.0,
         nu: Optional[Union[float, Sequence[float]]] = (1e-3, 1e-2),
         nu_dopamin: Optional[Union[float, Sequence[float]]] = (0, -0.02),
@@ -564,6 +565,7 @@ class DiehlAndCook2015_withDopamin(Network):
         tc_theta_decay: float = 100,
         tc_decay_dopamin: float = 200/0.6931, 
         inpt_shape: Optional[Iterable[int]] = None,
+        device = 'cpu',
         **kwargs
     ) -> None:
         # language=rst
@@ -614,7 +616,7 @@ class DiehlAndCook2015_withDopamin(Network):
             traces=True,
             rest=-65.0,
             reset=-65.0,
-            thresh=-51.0,
+            thresh=-65.0 + exc_threshold,
             refrac=5,
             tc_decay=15.0,
             tc_trace = 100.0,
