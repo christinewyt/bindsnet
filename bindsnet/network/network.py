@@ -637,7 +637,7 @@ class Network(torch.nn.Module):
             self.connections[c].normalize()
 
 
-      def run_dopamin(
+    def run_dopamin(
         self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, L2_norm=True, **kwargs
         ) -> None:
         # language=rst
