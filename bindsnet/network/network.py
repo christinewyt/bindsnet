@@ -815,9 +815,13 @@ class Network(torch.nn.Module):
           if source == "X":
             if L2_norm == True:
               w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
+              neuron_idx = (Flag_spike==0).nonzero(as_tuple=True)[0]
+              print("Before norm:", w_norm[0][neuron_idx])
               w_norm[w_norm == 0] = 1.0
               self.connections[c].w *= norm_L2 / w_norm
               self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
+              print("After norm:", w_norm[0][neuron_idx])
             else:
               w_sum = self.connections[c].w.sum(0)
               self.connections[c].w *= norm_L1 / w_sum
@@ -827,10 +831,10 @@ class Network(torch.nn.Module):
           if source == "Dopamin":
             if L2_norm == True:
               w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              print("w_norm before scale:", w_norm)
+              #print("w_norm before scale:", w_norm)
               self.connections[c].w *=norm_L2_dopamin / w_norm
-              w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              print("w_norm after scale:", w_norm)
+              #w_norm = torch.sqrt((self.connections[c].w**2).sum())
+              #print("w_norm after scale:", w_norm)
             else:
               w_sum = (self.connections[c].w).sum()
               self.connections[c].w *= norm_L2_dopamin/w_sum
