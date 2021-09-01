@@ -827,10 +827,10 @@ class Network(torch.nn.Module):
           if source == "Dopamin":
             if L2_norm == True:
               w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              #print("w_max before scale:", self.connections[c].w.max())
+              print("w_norm before scale:", w_norm)
               self.connections[c].w *=norm_L2_dopamin / w_norm
               w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              #print("w_max after scale:", self.connections[c].w.max())
+              print("w_norm after scale:", w_norm)
             else:
               w_sum = (self.connections[c].w).sum()
               self.connections[c].w *= norm_L2_dopamin/w_sum
