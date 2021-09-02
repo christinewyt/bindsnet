@@ -820,7 +820,7 @@ class Network(torch.nn.Module):
           source, target = c
           if source == "X":
             if Flag_L2_norm == True:
-              self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              #self.connections[c].w[self.connections[c].w>1.0] = 1.0
               w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
               neuron_idx = torch.argmin(Flag_spike)
               #print("Before norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
