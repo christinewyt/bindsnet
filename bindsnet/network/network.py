@@ -638,7 +638,7 @@ class Network(torch.nn.Module):
 
 
     def run_dopamin(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, L2_norm=True, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, Flag_L2_norm=True, **kwargs
         ) -> None:
         # language=rst
         # Check input type
@@ -651,7 +651,7 @@ class Network(torch.nn.Module):
         unclamps = kwargs.get("unclamp", {})
         masks = kwargs.get("masks", {})
         injects_v = kwargs.get("injects_v", {})
-        if L2_norm == True:
+        if Flag_L2_norm == True:
           norm_L2 = kwargs.get("norm_L2", {})
         else:
           norm_L1 = kwargs.get("norm_L1", {})
@@ -698,7 +698,8 @@ class Network(torch.nn.Module):
         # Mark whether dopamin signal has been applied
         Flag_dopamin = False
         Flag_learning_rate = False
-        t_spike_last = -100
+        t_last_spike = -100
+        t_dopamin = t_last_spike
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
@@ -747,7 +748,7 @@ class Network(torch.nn.Module):
                       Flag_learning_rate=True
                 
                 # Send dopamin inputs to excitatory neurons until one of the neuron spikes
-                if l=='Ae' and torch.min(Flag_spike)==n_dopamin_spike and Flag_dopamin==True:
+                if l=='Ae' and t_last_spike<t_dopamin and Flag_dopamin==True:
                   current_inputs[l] += self.connections[('Dopamin', 'Ae')].w 
 
                 if l in current_inputs:
@@ -765,6 +766,7 @@ class Network(torch.nn.Module):
                           #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
                           #print("idx", idx)
                           Flag_spike[idx] -= 1 
+                          t_last_spike = t
 
                 # Check whether dopamin neuron fire or not
                 if l=='Dopamin':
@@ -774,6 +776,7 @@ class Network(torch.nn.Module):
                       #print("Dopamin spike time:", t)
                       #print(self.connections[('Dopamin', 'Ae')].w[100], self.connections[('Dopamin', 'Ae')].w.mean())
                       Flag_dopamin = True
+                      t_dopamin = t
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -816,23 +819,29 @@ class Network(torch.nn.Module):
         for c in self.connections:
           source, target = c
           if source == "X":
-            if L2_norm == True:
+            if Flag_L2_norm == True:
+              self.connections[c].w[self.connections[c].w>1.0] = 1.0
               w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
               neuron_idx = torch.argmin(Flag_spike)
-              #print("Before norm:", w_norm[0][neuron_idx], self.connections[c].w.max())
+              #print("Before norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
               w_norm[w_norm == 0] = 1.0
               self.connections[c].w *= norm_L2 / w_norm
               self.connections[c].w[self.connections[c].w>1.0] = 1.0
               #w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
-              #print("After norm:", w_norm[0][neuron_idx], self.connections[c].w.max())
+              #print("After norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
             else:
-              w_sum = self.connections[c].w.sum(0)
-              self.connections[c].w *= norm_L1 / w_sum
               self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              w_sum = self.connections[c].w.sum(0).unsqueeze(0)
+              w_sum[w_sum == 0] = 1.0
+              Mask = 1.0*(w_sum>norm_L1)
+              neuron_idx = torch.argmin(Flag_spike)
+              #print("Before norm:", self.connections[c].w.sum(0)[neuron_idx])
+              self.connections[c].w *= (Mask*norm_L1/w_sum + (1-Mask))
+              #print("After norm:", self.connections[c].w.sum(0)[neuron_idx])
               #self.connections[c].normalize()
           
           if source == "Dopamin":
-            if L2_norm == True:
+            if Flag_L2_norm == True:
               w_norm = torch.sqrt((self.connections[c].w**2).sum())
               #print("w_norm before scale:", w_norm)
               self.connections[c].w *=norm_L2_dopamin / w_norm
@@ -841,3 +850,5 @@ class Network(torch.nn.Module):
             else:
               w_sum = (self.connections[c].w).sum()
               self.connections[c].w *= norm_L2_dopamin/w_sum
+        
+
