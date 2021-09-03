@@ -818,7 +818,7 @@ class Network(torch.nn.Module):
                           t_last_spike = t
                           if neuron_dopamin_idx==None and Flag_dopamin==True:
                             neuron_dopamin_idx = idx[0]
-                            Flag_spike[neuron_dopamin_idx] += 1
+                            Flag_spike[:] = n_dopamin_spike
                             #print("Idx of neuron that is activated by dopamin neuron", neuron_dopamin_idx)
 
                 # Clamp neurons to spike.
