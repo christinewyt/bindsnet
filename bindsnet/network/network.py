@@ -796,6 +796,16 @@ class Network(torch.nn.Module):
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
 
+                # Check whether dopamin neuron fire or not
+                if l=='Dopamin':
+                  # Get the spiking information
+                  spikes_dop = getattr(self.monitors['Dopamin_spikes'].obj, "s").squeeze()
+                  if spikes_dop==True and t>10:
+                      #print("Dopamin spike time:", t)
+                      #print(self.connections[('Dopamin', 'Ae')].w[100], self.connections[('Dopamin', 'Ae')].w.mean())
+                      Flag_dopamin = True
+                      t_dopamin = t
+
                 if l=='Ae':
                   # Get the spiking information
                   if torch.min(Flag_spike)>0:
@@ -810,16 +820,6 @@ class Network(torch.nn.Module):
                             neuron_dopamin_idx = idx[0]
                             Flag_spike[neuron_dopamin_idx] += 1
                             #print("Idx of neuron that is activated by dopamin neuron", neuron_dopamin_idx)
-
-                # Check whether dopamin neuron fire or not
-                if l=='Dopamin':
-                  # Get the spiking information
-                  spikes_dop = getattr(self.monitors['Dopamin_spikes'].obj, "s").squeeze()
-                  if spikes_dop==True and t>10:
-                      #print("Dopamin spike time:", t)
-                      #print(self.connections[('Dopamin', 'Ae')].w[100], self.connections[('Dopamin', 'Ae')].w.mean())
-                      Flag_dopamin = True
-                      t_dopamin = t
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
