@@ -773,7 +773,7 @@ class Network(torch.nn.Module):
                     current_inputs.update(self._get_inputs(layers=[l]))
                   
                 # If dopamin neuron spikes, increase learning rate
-                if Flag_dopamin==True and torch.min(Flag_spike)>0 and Flag_learning_rate==False:
+                if Flag_dopamin==True and t-t_dopamin>=5 and torch.min(Flag_spike)>0 and Flag_learning_rate==False:
                     if l=='Ae':
                       # Change STDP learning rate to nu
                       Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
