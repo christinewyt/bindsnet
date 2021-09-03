@@ -637,11 +637,46 @@ class Network(torch.nn.Module):
             self.connections[c].normalize()
 
 
-    def run_dopamin(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, Flag_L2_norm=True, **kwargs
+    def run_dopamine(
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, Flag_L2_norm=True, Flag_reset=False, **kwargs
         ) -> None:
         # language=rst
-        # Check input type
+        """
+        Simulate network for given inputs and time with dopamine neuron.
+
+        :param inputs: Dictionary of ``Tensor``s of shape ``[time, *input_shape]`` or
+                      ``[time, batch_size, *input_shape]``.
+        :param time: Simulation time.
+        :param one_step: Whether to run the network in "feed-forward" mode, where inputs
+            propagate all the way through the network in a single simulation time step.
+            Layers are updated in the order they are added to the network.
+        :Flag_L2_norm [Boolean]: Whether to apply L2_normalization to the weight matrix, 
+          if true, input norm_L2; otherwise, apply L1_normalization, input norm_L1.
+        :Flag_reset[Boolean]: Whether to reset the weight matrix be zero when dopamine neuron spikes, 
+          for one-shot learning, it helps to remove the influence of background. 
+        Keyword arguments:
+
+        :param Dict[str, torch.Tensor] clamp: Mapping of layer names to boolean masks if
+            neurons should be clamped to spiking. The ``Tensor``s have shape
+            ``[n_neurons]`` or ``[time, n_neurons]``.
+        :param Dict[str, torch.Tensor] unclamp: Mapping of layer names to boolean masks
+            if neurons should be clamped to not spiking. The ``Tensor``s should have
+            shape ``[n_neurons]`` or ``[time, n_neurons]``.
+        :param Dict[str, torch.Tensor] injects_v: Mapping of layer names to boolean
+            masks if neurons should be added voltage. The ``Tensor``s should have shape
+            ``[n_neurons]`` or ``[time, n_neurons]``.
+        :param Union[float, torch.Tensor] reward: Scalar value used in reward-modulated
+            learning.
+        :param Dict[Tuple[str], torch.Tensor] masks: Mapping of connection names to
+            boolean masks determining which weights to clamp to zero.
+        :param Bool progress_bar: Show a progress bar while running the network.
+        :param n_dopamine_spike: Number of excitatory spikes that needs to be recorded for the learning of one image. 
+          Once reached, stop the learning and reset the network for the next image.  
+
+        :param norm_L2[float]: L2-normalize the weight matrix to be norm_L2.
+        :param norm_L1[float]: L1_normalize the weight matrix to be norm_L1.
+        :param Scaling[float]: Scaling factor of dopamin_to_excitatory weight. 
+        """
         assert type(inputs) == dict, (
             "'inputs' must be a dict of names of layers "
             + f"(str) and relevant input tensors. Got {type(inputs).__name__} instead."
@@ -659,6 +694,7 @@ class Network(torch.nn.Module):
         n_dopamin_spike = kwargs.get("n_dopamin_spike", {})
         nu_original = kwargs.get("nu_original", {})
         nu_enhanced = kwargs.get("nu_enhanced", {})
+        Scaling = kwargs.get("Scaling", {})
 
         # Compute reward.
         if self.reward_fn is not None:
@@ -682,28 +718,27 @@ class Network(torch.nn.Module):
                 # batch dimension is 1, grab this and use for batch size
                 if inputs[key].size(1) != self.batch_size:
                     self.batch_size = inputs[key].size(1)
-
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
-
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
-
                 break
 
         # Mark the number of spikes excitatory neurons have emitted
         n_neuron = self.connections[('X', 'Ae')].w.shape[1]
         Flag_spike = n_dopamin_spike*torch.ones((n_neuron), device = self._get_inputs(layers=['Ae'])['Ae'].device)
-        #print(Flag_spike.shape)
+        
         # Mark whether dopamin signal has been applied
         Flag_dopamin = False
         Flag_learning_rate = False
+        neuron_dopamin_idx = None # Track the index of the neuron that is activated by the dopamin input
         t_last_spike = -100
         t_dopamin = t_last_spike
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
+        # Set learning rate to nu_original 
         Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
         setattr(Update_rule, 'nu', nu_original)
 
@@ -748,8 +783,13 @@ class Network(torch.nn.Module):
                       Flag_learning_rate=True
                 
                 # Send dopamin inputs to excitatory neurons until one of the neuron spikes
-                if l=='Ae' and t_last_spike<t_dopamin and Flag_dopamin==True:
+                if l=='Ae' and Flag_dopamin==True and neuron_dopamin_idx==None:
                   current_inputs[l] += self.connections[('Dopamin', 'Ae')].w 
+
+                # Send dopamin input to the excitatory neuron that is activated
+                if neuron_dopamin_idx != None and l=='Ae':
+                  current_inputs[l][0, neuron_dopamin_idx] += 1.0
+                  
 
                 if l in current_inputs:
                     self.layers[l].forward(x=current_inputs[l])
@@ -764,9 +804,12 @@ class Network(torch.nn.Module):
                       if len(idx)>0:
                           #print("exc spike time:", t, " neuron:", idx)
                           #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
-                          #print("idx", idx)
                           Flag_spike[idx] -= 1 
                           t_last_spike = t
+                          if neuron_dopamin_idx==None and Flag_dopamin==True:
+                            neuron_dopamin_idx = idx[0]
+                            Flag_spike[neuron_dopamin_idx] += 1
+                            #print("Idx of neuron that is activated by dopamin neuron", neuron_dopamin_idx)
 
                 # Check whether dopamin neuron fire or not
                 if l=='Dopamin':
@@ -802,14 +845,18 @@ class Network(torch.nn.Module):
                     else:
                         self.layers[l].v += inject_v[t]
 
-            # Run synapse updates.
+            # Run synapse updates & Reset weight to zero if dopamine spikes.
             for c in self.connections:
                 self.connections[c].update(
                     mask=masks.get(c, None), learning=self.learning, **kwargs
                 )
-
-            # # Get input to all layers.
-            # current_inputs.update(self._get_inputs())
+                # If Flag_reset is true and dopamine neuron fires
+                # Reset the feature map of the excited neuron to zero before learning 
+                source, target = c
+                if source=='X':
+                  if Flag_reset==True and Flag_dopamin==True and neuron_dopamin_idx!=None:
+                    self.connections[c].w[:, neuron_dopamin_idx] *= 0 
+                    Flag_reset = False  
 
             # Record state variables of interest.
             for m in self.monitors:

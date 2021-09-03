@@ -563,7 +563,7 @@ class DiehlAndCook2015_withDopamin(Network):
         wmax: float = 1.0,
         theta_plus: float = 0.0,
         tc_theta_decay: float = 100,
-        tc_decay_dopamin: float = 200/0.6931, 
+        tc_decay_dopamin: float = 100/0.6931, 
         inpt_shape: Optional[Iterable[int]] = None,
         device = 'cpu',
         **kwargs
