@@ -317,6 +317,7 @@ class Network(torch.nn.Module):
         unclamps = kwargs.get("unclamp", {})
         masks = kwargs.get("masks", {})
         injects_v = kwargs.get("injects_v", {})
+        Flag_norm = kwargs.get("Flag_norm", {})
     
         # Compute reward.
         if self.reward_fn is not None:
@@ -414,8 +415,9 @@ class Network(torch.nn.Module):
                 self.monitors[m].record()
 
         # Re-normalize connections.
-        for c in self.connections:
-            self.connections[c].normalize()
+        if Flag_norm == True:
+            for c in self.connections:
+                self.connections[c].normalize()
 
     def reset_state_variables(self) -> None:
         # language=rst
