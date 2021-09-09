@@ -450,6 +450,11 @@ class WeightDependentDopamin(LearningRule):
 
         # Post-synaptic update.
         # Reduce dopamin to exc neurons every time exc neuron fires 
+        source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
+        target_s = self.target.s.view(batch_size, -1).unsqueeze(1).float()
+        if self.nu[0]:
+          outer_product = self.reduction(torch.bmm(source_x, target_s), dim=0)
+          update += self.nu[0] * self.connection.w * outer_product 
         if self.nu[1]:
             source_x = 1.0*torch.ones_like(self.source.x.view(batch_size, -1).unsqueeze(2))
             target_s = self.target.s.view(batch_size, -1).unsqueeze(1).float()
@@ -459,6 +464,7 @@ class WeightDependentDopamin(LearningRule):
         self.connection.w += update
 
         super().update()
+
 
 class Hebbian(LearningRule):
     # language=rst
