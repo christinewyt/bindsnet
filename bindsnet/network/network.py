@@ -728,7 +728,8 @@ class Network(torch.nn.Module):
 
         # Mark the number of spikes excitatory neurons have emitted
         n_neuron = self.connections[('X', 'Ae')].w.shape[1]
-        Flag_spike = n_dopamin_spike*torch.ones((n_neuron), device = self._get_inputs(layers=['Ae'])['Ae'].device)
+        device = self.connections[('X', 'Ae')].w.device
+        Flag_spike = n_dopamin_spike*torch.ones((n_neuron), device = device)
         
         # Mark whether dopamin signal has been applied
         Flag_dopamin = False
