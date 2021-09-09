@@ -641,7 +641,7 @@ class DiehlAndCook2015_withDopamin(Network):
             reset = 0.0,
             thresh = 1.0,
             tc_decay = tc_decay_dopamin, 
-            tc_trace = 200.0,
+            tc_trace = 10.0,
             refrac = 0.0,
         )
 
