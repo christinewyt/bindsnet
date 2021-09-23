@@ -564,7 +564,7 @@ class Network(torch.nn.Module):
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
-            print("time:", t, " input:", current_inputs['Ae'])
+            #print("time:", t, " input:", current_inputs['Ae'])
 
             # Get the spiking 
             if not Flag_spike:
@@ -696,7 +696,8 @@ class Network(torch.nn.Module):
         n_dopamin_spike = kwargs.get("n_dopamin_spike", {})
         nu_original = kwargs.get("nu_original", {})
         nu_enhanced = kwargs.get("nu_enhanced", {})
-        Scaling = kwargs.get("Scaling", {})
+        wmax_dopamin = kwargs.get("wmax_dopamin", None)
+        w_dop_origin = kwargs.get("w_dop_origin", None)
 
         # Compute reward.
         if self.reward_fn is not None:
@@ -736,7 +737,6 @@ class Network(torch.nn.Module):
         Flag_learning_rate = False
         neuron_dopamin_idx = None # Track the index of the neuron that is activated by the dopamin input
         t_last_spike = -100
-        t_dopamin = t_last_spike
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
@@ -755,8 +755,9 @@ class Network(torch.nn.Module):
             # Turn off dopamin exc input and reset learning rate to the original value
             if torch.min(Flag_spike)==0:
               Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
+              nu_old = getattr(Update_rule, 'nu')
               setattr(Update_rule, 'nu', nu_original)
-              #print("At time:", t, "; Change learning rule from:", nu_dopamin, " to:", getattr(Update_rule, 'nu'))
+              #print("At time:", t, "; Change learning rule from:", nu_old, " to:", getattr(Update_rule, 'nu'))
               #print("************************")
               Flag_dopamin=False
               Flag_learning_rate = False
@@ -780,7 +781,7 @@ class Network(torch.nn.Module):
                     if l=='Ae':
                       # Change STDP learning rate to nu
                       Update_rule = getattr(self.connections[('X', 'Ae')], 'update_rule')
-                      nu_old = getattr(Update_rule, 'nu') 
+                      #nu_old = getattr(Update_rule, 'nu') 
                       setattr(Update_rule, 'nu', nu_enhanced)
                       #print("At time:", t, "; Change learning rule from:", nu_old, " to:", getattr(Update_rule, 'nu'))
                       Flag_learning_rate=True
@@ -850,12 +851,12 @@ class Network(torch.nn.Module):
 
             # Run synapse updates & Reset weight to zero if dopamine spikes.
             for c in self.connections:
+                source, target = c
                 self.connections[c].update(
                     mask=masks.get(c, None), learning=self.learning, **kwargs
                 )
                 # If Flag_reset is true and dopamine neuron fires
                 # Reset the feature map of the excited neuron to zero before learning 
-                source, target = c
                 if source=='X':
                   if Flag_reset==True and Flag_dopamin==True and neuron_dopamin_idx!=None:
                     self.connections[c].w[:, neuron_dopamin_idx] *= 0 
@@ -880,25 +881,25 @@ class Network(torch.nn.Module):
               #w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
               #print("After norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
             else:
-              self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              #self.connections[c].w[self.connections[c].w>1.0] = 1.0
               w_sum = self.connections[c].w.sum(0).unsqueeze(0)
               w_sum[w_sum == 0] = 1.0
-              Mask = 1.0*(w_sum>norm_L1)
+              #self.connections[c].w *= norm_L1/w_sum 
               neuron_idx = torch.argmin(Flag_spike)
               #print("Before norm:", self.connections[c].w.sum(0)[neuron_idx])
+              Mask = 1.0*(w_sum>norm_L1)
               self.connections[c].w *= (Mask*norm_L1/w_sum + (1-Mask))
               #print("After norm:", self.connections[c].w.sum(0)[neuron_idx])
               #self.connections[c].normalize()
           
           if source == "Dopamin":
-            if Flag_L2_norm == True:
-              w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              #print("w_norm before scale:", w_norm)
-              self.connections[c].w *=norm_L2_dopamin / w_norm
-              #w_norm = torch.sqrt((self.connections[c].w**2).sum())
-              #print("w_norm after scale:", w_norm)
-            else:
-              w_sum = (self.connections[c].w).sum()
-              self.connections[c].w *= norm_L2_dopamin/w_sum
-        
-
+            w_dop_exc = self.connections[c].w
+            w_norm = torch.sqrt((w_dop_exc**2).sum())
+            w_norm[w_norm==0] = 1.0
+            #print("w_norm before scale:", w_norm)
+            w_dop_exc *=self.connections[c].norm_L2 / w_norm
+            #w_norm = torch.sqrt((self.connections[c].w**2).sum())
+            #print("w_norm after scale:", w_norm)
+            if wmax_dopamin is not None and w_dop_exc.max()>wmax_dopamin:
+              w_dop_exc *= w_dop_origin/w_dop_exc.max()
+              self.connections[c].norm_L2 = torch.sqrt((w_dop_exc**2).sum())

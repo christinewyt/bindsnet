@@ -4,6 +4,61 @@ from typing import Optional, Tuple, Dict
 import torch
 from sklearn.linear_model import LogisticRegression
 
+def assign_labels_WTA(
+    spikes: torch.Tensor,
+    labels: torch.Tensor,
+    n_labels: int,
+    rates: Optional[torch.Tensor] = None,
+    alpha: float = 1.0,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    # language=rst
+    """
+    Assign labels to the neurons by WTA. 
+    For each sample, the corresponding label index of the neuron with the highest firing rate will be added by one. 
+    For each neuron, the digit with the highest rate will be the assigned label of that neuron. 
+    And the proportions will be computed according to the proportions of the proportional rates of each digit. 
+    
+    Difference between assign_labels_WTA and assign_labels is that assign_labels_WTA only consider the neuron with the highest firing rate for each sample. 
+    While assign_labels take into consider the spikes of all neurons for each sample. 
+
+    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a single
+        layer's spiking activity.
+    :param labels: Vector of shape ``(n_samples,)`` with data labels corresponding to
+        spiking activity.
+    :param n_labels: The number of target labels in the data.
+    :param rates: If passed, these represent spike rates from a previous
+        ``assign_labels()`` call.
+    :param alpha: Rate of decay of label assignments.
+    :return: Tuple of class assignments, per-class spike proportions, and per-class
+        firing rates.
+    """
+    n_neurons = spikes.size(2)
+    
+    # Recording the firing rates of each neuron for each label 
+    if rates is None:
+        rates = torch.zeros((n_neurons, n_labels), device=spikes.device)
+
+    # Sum over time dimension (spike ordering doesn't matter).
+    spikes = spikes.sum(1)
+    # Find the WTA neuron for each sample 
+    neuron_indices_WTA = torch.argmax(spikes, dim=1)  
+    for i in range(n_labels):
+        # Count the number of samples with this label.
+        n_labeled = torch.sum(labels==i).float()
+        
+        if n_labeled > 0:
+            # Get the indices of samples with this label. 
+            indices = torch.nonzero(labels == i).view(-1)
+
+            # Compute the firing rates for this label. 
+            rates[neuron_indices_WTA[indices], i] += 1/n_labeled
+            
+    # Compute proportions of spike activity per class.
+    proportions = rates / rates.sum(1, keepdim=True)
+    proportions[proportions != proportions] = 0  # Set NaNs to 0
+
+    assignments = torch.max(rates, 1)[1]
+    return assignments, proportions, rates
 
 def assign_labels(
     spikes: torch.Tensor,
@@ -42,18 +97,20 @@ def assign_labels(
         if n_labeled > 0:
             # Get indices of samples with this label.
             indices = torch.nonzero(labels == i).view(-1)
-
             # Compute average firing rates for this label.
             rates[:, i] = alpha * rates[:, i] + (
                 torch.sum(spikes[indices], 0) / n_labeled
             )
 
     # Compute proportions of spike activity per class.
-    proportions = rates / rates.sum(1, keepdim=True)
+    rates_sum = rates.sum(1, keepdim=True)
+    neuron_idx = torch.where(rates_sum==0)[0]
+    proportions = rates / rates_sum 
     proportions[proportions != proportions] = 0  # Set NaNs to 0
 
     # Neuron assignments are the labels they fire most for.
     assignments = torch.max(proportions, 1)[1]
+    assignments[neuron_idx] = -1
 
     return assignments, proportions, rates
 

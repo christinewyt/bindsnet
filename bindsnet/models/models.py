@@ -551,8 +551,8 @@ class DiehlAndCook2015_withDopamin(Network):
         n_inpt: int,
         n_neurons: int = 100,
         exc: float = 22.5,
-        inh: float = 17.5,
-        exc_dopamin: float = 100.0,
+        inh: float = 120.0,
+        exc_dopamin: float = 10.0,
         dopamin_exc: float = 20.0, 
         exc_threshold: float = 14.0, 
         dt: float = 1.0,
@@ -606,6 +606,10 @@ class DiehlAndCook2015_withDopamin(Network):
         self.dt = dt
 
         self.norm = kwargs.get("norm", None)
+        self.norm_L1 = kwargs.get("norm_L1", None)
+        self.norm_L2 = kwargs.get("norm_L2", None)
+        self.wmax_dopamin = kwargs.get("wmax_dopamin", None)
+        #print("wmax_dopamin", self.wmax_dopamin)
 
         # Layers
         input_layer = Input(
@@ -647,7 +651,14 @@ class DiehlAndCook2015_withDopamin(Network):
 
         # Connections
         w = 0.01 * torch.rand(self.n_inpt, self.n_neurons)
-        
+        if self.norm_L1 is not None:
+          w_sum = torch.sum(w, dim=0)
+          w_sum[w_sum==0] = 1.0
+          w *= self.norm_L1/w_sum 
+        elif self.norm_L2 is not None:
+          w_norm = torch.sqrt((w**2).sum())
+          w_norm[w_norm==0] = 1.0
+          w *= self.norm_L2/w_norm 
         input_exc_conn = Connection(
             source=input_layer,
             target=exc_layer,
@@ -657,12 +668,15 @@ class DiehlAndCook2015_withDopamin(Network):
             reduction=reduction,
             wmin=0.0,
             wmax=wmax,
-            **kwargs
+            norm_L1 = self.norm_L1, 
+            norm_L2 = self.norm_L2
         )
+
         w = self.exc * torch.diag(torch.ones(self.n_neurons))
         exc_inh_conn = Connection(
             source=exc_layer, target=inh_layer, w=w, wmin=0, wmax=self.exc
         )
+
         w = -self.inh * (
             torch.ones(self.n_neurons, self.n_neurons)
             - torch.diag(torch.ones(self.n_neurons))
@@ -670,12 +684,12 @@ class DiehlAndCook2015_withDopamin(Network):
         inh_exc_conn = Connection(
             source=inh_layer, target=exc_layer, w=w, wmin=-self.inh, wmax=0
         )
-        w = torch.ones((self.n_neurons, 1), device = device)
-        w_norm = torch.sqrt((w**2).sum())
-        w = -w/w_norm * exc_dopamin
+
+        w = -exc_dopamin * torch.ones((self.n_neurons, 1), device = device)
         exc_dop_conn = Connection(
             source=exc_layer, target=dopamin_layer, w=w,
         )
+
         w = torch.ones((1, self.n_neurons), device = device)
         w_norm = torch.sqrt((w**2).sum())
         w = w/w_norm * dopamin_exc
@@ -687,7 +701,8 @@ class DiehlAndCook2015_withDopamin(Network):
             nu=nu_dopamin,
             reduction=reduction,
             wmin = 0.0,
-            **kwargs
+            wmax = self.wmax_dopamin,
+            norm_L2 = dopamin_exc,
         )
 
         # Add to network

@@ -100,6 +100,7 @@ class Nodes(torch.nn.Module):
             if self.traces_additive:
                 self.x += self.trace_scale * self.s.float()
             else:
+                #print(self.s.shape)
                 self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
         if self.sum_input:

@@ -61,7 +61,7 @@ class AbstractConnection(ABC, Module):
         self.update_rule = kwargs.get("update_rule", NoOp)
         self.wmin = kwargs.get("wmin", -np.inf)
         self.wmax = kwargs.get("wmax", np.inf)
-        self.norm = kwargs.get("norm", None)
+        self.norm_L1 = kwargs.get("norm_L1", None)
         self.norm_L2 = kwargs.get("norm_L2", None)
         self.decay = kwargs.get("decay", None)
 
@@ -164,7 +164,7 @@ class Connection(AbstractConnection):
         :param torch.Tensor b: Target population bias.
         :param float wmin: Minimum allowed value on the connection weights.
         :param float wmax: Maximum allowed value on the connection weights.
-        :param float norm: Total weight per target neuron normalization constant.
+        :param float norm_L1: Total weight per target neuron normalization constant.
         """
         super().__init__(source, target, nu, reduction, weight_decay, **kwargs)
 
@@ -246,10 +246,10 @@ class Connection(AbstractConnection):
         Normalize weights so each target neuron has sum of connection weights equal to
         ``self.norm``.
         """
-        if self.norm is not None:
+        if self.norm_L1 is not None:
             w_abs_sum = self.w.abs().sum(0).unsqueeze(0)
             w_abs_sum[w_abs_sum == 0] = 1.0
-            self.w *= self.norm / w_abs_sum
+            self.w *= self.norm_L1 / w_abs_sum
 
     def normalize_L2(self) -> None:
         # language=rst
@@ -422,14 +422,14 @@ class Conv2dConnection(AbstractConnection):
         Normalize weights along the first axis according to total weight per target
         neuron.
         """
-        if self.norm is not None:
+        if self.norm_L1 is not None:
             # get a view and modify in place
             w = self.w.view(
                 self.w.shape[0] * self.w.shape[1], self.w.shape[2] * self.w.shape[3]
             )
 
             for fltr in range(w.shape[0]):
-                w[fltr] *= self.norm / w[fltr].sum(0)
+                w[fltr] *= self.norm_L1 / w[fltr].sum(0)
 
     def reset_state_variables(self) -> None:
         # language=rst
@@ -650,8 +650,8 @@ class LocalConnection(AbstractConnection):
 
         self.b = Parameter(kwargs.get("b", torch.zeros(target.n)), requires_grad=False)
 
-        if self.norm is not None:
-            self.norm *= kernel_prod
+        if self.norm_L1 is not None:
+            self.norm_L1 *= kernel_prod
 
     def compute(self, s: torch.Tensor) -> torch.Tensor:
         # language=rst
@@ -689,9 +689,9 @@ class LocalConnection(AbstractConnection):
         Normalize weights so each target neuron has sum of connection weights equal to
         ``self.norm``.
         """
-        if self.norm is not None:
+        if self.norm_L1 is not None:
             w = self.w.view(self.source.n, self.target.n)
-            w *= self.norm / self.w.sum(0).view(1, -1)
+            w *= self.norm_L1 / self.w.sum(0).view(1, -1)
 
     def reset_state_variables(self) -> None:
         # language=rst
@@ -770,9 +770,9 @@ class MeanFieldConnection(AbstractConnection):
         Normalize weights so each target neuron has sum of connection weights equal to
         ``self.norm``.
         """
-        if self.norm is not None:
+        if self.norm_L1 is not None:
             self.w = self.w.view(1, self.target.n)
-            self.w *= self.norm / self.w.sum()
+            self.w *= self.norm_L1 / self.w.sum()
             self.w = self.w.view(1, *self.target.shape)
 
     def reset_state_variables(self) -> None:

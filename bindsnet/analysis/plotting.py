@@ -176,6 +176,11 @@ def plot_spikes(
 
     return ims, axes
 
+def highlight_cell(x,y, ax=None, **kwargs):
+    rect = plt.Rectangle((y-.5, x-.5), 28, 28, fill=False, **kwargs)
+    ax = ax or plt.gca()
+    ax.add_patch(rect)
+    return rect
 
 def plot_weights(
     weights: torch.Tensor,
@@ -185,6 +190,8 @@ def plot_weights(
     figsize: Tuple[int, int] = (5, 5),
     cmap: str = "hot_r",
     save: Optional[str] = None,
+    label_idx: Optional[List[int]] = None,
+    n_sqrt: Optional[int] = None,
 ) -> AxesImage:
     # language=rst
     """
@@ -197,6 +204,7 @@ def plot_weights(
     :param figsize: Horizontal, vertical figure size in inches.
     :param cmap: Matplotlib colormap.
     :param save: file name to save fig, if None = not saving fig.
+    :param label_idx: Mark the feature map of the neurons in the label_idx with rectangular border
     :return: ``AxesImage`` for re-drawing the weights plot.
     """
     local_weights = weights.detach().clone().cpu().numpy()
@@ -206,6 +214,13 @@ def plot_weights(
         fig, ax = plt.subplots(figsize=figsize)
 
         im = ax.imshow(local_weights, cmap=cmap, vmin=wmin, vmax=wmax)
+        if label_idx is not None:
+          for neuron_idx in label_idx:
+            x = int(neuron_idx/n_sqrt)
+            y = neuron_idx % n_sqrt
+            x *= 28
+            y *= 28
+            highlight_cell(x, y, ax=ax, color="limegreen", linewidth=3)
         div = make_axes_locatable(ax)
         cax = div.append_axes("right", size="5%", pad=0.05)
 
@@ -234,6 +249,13 @@ def plot_weights(
             fig, ax = plt.subplots(figsize=figsize)
 
             im = ax.imshow(local_weights, cmap=cmap, vmin=wmin, vmax=wmax)
+            if label_idx is not None:
+              for neuron_idx in label_idx:
+                x = int(neuron_idx/n_sqrt)
+                y = neuron_idx % n_sqrt
+                x *= 28
+                y *= 28
+                highlight_cell(x, y, ax=ax, color="limegreen", linewidth=3)
             div = make_axes_locatable(ax)
             cax = div.append_axes("right", size="5%", pad=0.05)
 
@@ -247,7 +269,6 @@ def plot_weights(
             im.set_data(local_weights)
 
         return im
-
 
 def plot_conv2d_weights(
     weights: torch.Tensor,
