@@ -328,12 +328,12 @@ class WeightDependentPostPre(LearningRule):
         # Pre-synaptic update.
         if self.nu[0]:
             outer_product = self.reduction(torch.bmm(source_s, target_x), dim=0)
-            update -= self.nu[0] * outer_product * (self.connection.w - self.wmin)
+            update -= self.nu[0] * outer_product * (self.connection.w - self.wmin)/(self.wmax-self.wmin)
 
         # Post-synaptic update.
         if self.nu[1]:
             outer_product = self.reduction(torch.bmm(source_x, target_s), dim=0)
-            update += self.nu[1] * outer_product * (self.wmax - self.connection.w)
+            update += self.nu[1] * outer_product * (self.wmax - self.connection.w)/(self.wmax-self.wmin)
 
         self.connection.w += update
 

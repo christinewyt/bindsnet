@@ -805,3 +805,83 @@ def plot_dop_activities(dopamin_activities, interval, num_sample_digit, ims=None
   axes.set_ylabel("Accuracy")
   axes.set_xticks(range(0, k*interval, num_sample_digit))
   axes.legend()
+
+
+def plot_imshow(
+    input_matrix: torch.Tensor,
+    im: Optional[AxesImage] = None,
+    figsize: Tuple[int, int] = (5, 5),
+    title: Optional[str] = None,
+    vmax: Optional[int] = None,
+    vmin: Optional[int] = None,
+    save: Optional[str] = None,
+) -> AxesImage:
+    # language=rst
+    """
+    Plot the two-dimensional neuron assignments.
+
+    :param assignments: Vector of neuron label assignments.
+    :param im: Used for re-drawing the assignments plot.
+    :param figsize: Horizontal, vertical figure size in inches.
+    :param vmax/vmin: maximum/minimum of the displayed range.
+    :param save: file name to save fig, if None = not saving fig.
+    :return: Used for re-drawing the assigments plot.
+    """
+    local_input_matrix = input_matrix.detach().clone().cpu().numpy()
+
+    if save is not None:
+        plt.ioff()
+
+        a = save.split(".")
+        if len(a) == 2:
+            save = a[0] + ".1." + a[1]
+        else:
+            a[1] = "." + str(1 + int(a[1])) + ".png"
+            save = a[0] + a[1]
+
+        fig, ax = plt.subplots(figsize=figsize)
+        if title:
+          ax.set_title(title)
+
+        if vmin is not None:
+          im = ax.matshow(local_input_matrix, cmap="hot_r", vmin=vmin, vmax=vmax)
+        else:
+          im = ax.matshow(local_input_matrix, cmap="hot_r")
+       
+
+        div = make_axes_locatable(ax)
+        cax = div.append_axes("right", size="5%", pad=0.05)
+
+        cbar = plt.colorbar(im, cax=cax)
+       
+        ax.set_xticks(())
+        ax.set_yticks(())
+        # fig.tight_layout()
+
+        fig.savefig(save, bbox_inches="tight")
+        plt.close()
+
+        plt.ion()
+        return im, save
+    else:
+        if not im:
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.set_title(title)
+
+            if vmin is not None:
+              im = ax.matshow(local_input_matrix, cmap="hot_r", vmin=vmin, vmax=vmax)
+            else:
+              im = ax.matshow(local_input_matrix, cmap="hot_r")
+
+            div = make_axes_locatable(ax)
+            cax = div.append_axes("right", size="5%", pad=0.05)
+
+            cbar = plt.colorbar(im, cax=cax)
+
+            ax.set_xticks(())
+            ax.set_yticks(())
+            fig.tight_layout()
+        else:
+            im.set_data(local_input_matrix)
+
+        return im

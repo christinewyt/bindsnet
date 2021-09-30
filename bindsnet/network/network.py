@@ -591,7 +591,6 @@ class Network(torch.nn.Module):
                     ####################
                     # Change STDP learning rate to nu
 
-
                 if l in current_inputs:
                     self.layers[l].forward(x=current_inputs[l])
                 else:
@@ -640,7 +639,7 @@ class Network(torch.nn.Module):
 
 
     def run_dopamine(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, Flag_L2_norm=True, Flag_reset=False, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, Flag_L2_norm=True, Flag_reset=False, Flag_alif_reset=True, **kwargs
         ) -> None:
         # language=rst
         """
@@ -692,10 +691,10 @@ class Network(torch.nn.Module):
           norm_L2 = kwargs.get("norm_L2", {})
         else:
           norm_L1 = kwargs.get("norm_L1", {})
-        norm_L2_dopamin = kwargs.get("norm_L2_dopamin", {})
         n_dopamin_spike = kwargs.get("n_dopamin_spike", {})
         nu_original = kwargs.get("nu_original", {})
         nu_enhanced = kwargs.get("nu_enhanced", {})
+        wmax_exc = kwargs.get("wmax_exc", None)
         wmax_dopamin = kwargs.get("wmax_dopamin", None)
         w_dop_origin = kwargs.get("w_dop_origin", None)
 
@@ -775,7 +774,7 @@ class Network(torch.nn.Module):
                 if one_step:
                     # Get input to this layer (one-step mode).
                     current_inputs.update(self._get_inputs(layers=[l]))
-                  
+                
                 # If dopamin neuron spikes, increase learning rate
                 if Flag_dopamin==True and t-t_dopamin>=5 and torch.min(Flag_spike)>0 and Flag_learning_rate==False:
                     if l=='Ae':
@@ -793,12 +792,16 @@ class Network(torch.nn.Module):
                 # Send dopamin input to the excitatory neuron that is activated
                 if neuron_dopamin_idx != None and l=='Ae':
                   current_inputs[l][0, neuron_dopamin_idx] += 1.0
-                  
-
+                
                 if l in current_inputs:
                     self.layers[l].forward(x=current_inputs[l])
+                    if t==0 and l=='Ae':  
+                        #print("step:", t, self.layers[l].theta[0:10])
+                        #print("step:", t, self.layers[l].v[0][0:10])
+                        s_sum = self.layers[l].v >= (self.layers[l].thresh + self.layers[l].theta)
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
+
 
                 # Check whether dopamin neuron fire or not
                 if l=='Dopamin':
@@ -824,6 +827,14 @@ class Network(torch.nn.Module):
                             neuron_dopamin_idx = idx[0]
                             Flag_spike[:] = n_dopamin_spike
                             #print("Idx of neuron that is activated by dopamin neuron", neuron_dopamin_idx)
+                            # Reset the input feature map of the corresponding neuron to zero 
+                            if Flag_reset:
+                                self.connections[('X', 'Ae')].w[:, neuron_dopamin_idx] *= 0
+                            # Reset the adaptive threshold theta to zero 
+                            if Flag_alif_reset:
+                                theta = getattr(self.layers['Ae'], 'theta')
+                                theta[neuron_dopamin_idx] *= 0
+
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -855,12 +866,7 @@ class Network(torch.nn.Module):
                 self.connections[c].update(
                     mask=masks.get(c, None), learning=self.learning, **kwargs
                 )
-                # If Flag_reset is true and dopamine neuron fires
-                # Reset the feature map of the excited neuron to zero before learning 
-                if source=='X':
-                  if Flag_reset==True and Flag_dopamin==True and neuron_dopamin_idx!=None:
-                    self.connections[c].w[:, neuron_dopamin_idx] *= 0 
-                    Flag_reset = False  
+                
 
             # Record state variables of interest.
             for m in self.monitors:
@@ -877,7 +883,8 @@ class Network(torch.nn.Module):
               #print("Before norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
               w_norm[w_norm == 0] = 1.0
               self.connections[c].w *= norm_L2 / w_norm
-              self.connections[c].w[self.connections[c].w>1.0] = 1.0
+              if wmax_exc is not None:
+                  self.connections[c].w[self.connections[c].w>wmax_exc] = wmax_exc
               #w_norm = torch.sqrt((self.connections[c].w**2).sum(0).unsqueeze(0))
               #print("After norm:", w_norm[0][neuron_idx], self.connections[c].w.sum(0)[neuron_idx])
             else:
@@ -901,5 +908,5 @@ class Network(torch.nn.Module):
             #w_norm = torch.sqrt((self.connections[c].w**2).sum())
             #print("w_norm after scale:", w_norm)
             if wmax_dopamin is not None and w_dop_exc.max()>wmax_dopamin:
-              w_dop_exc *= w_dop_origin/w_dop_exc.max()
-              self.connections[c].norm_L2 = torch.sqrt((w_dop_exc**2).sum())
+                w_dop_exc[w_dop_exc>wmax_dopamin] = wmax_dopamin
+                self.connections[c].norm_L2 = torch.sqrt((w_dop_exc**2).sum())

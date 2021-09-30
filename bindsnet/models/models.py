@@ -626,7 +626,7 @@ class DiehlAndCook2015_withDopamin(Network):
             tc_trace = 100.0,
             theta_plus=theta_plus,
             tc_theta_decay=tc_theta_decay,
-            lbound = -65.0
+            lbound = -70.0
         )
         inh_layer = LIFNodes(
             n=self.n_neurons,

@@ -1086,14 +1086,13 @@ class DiehlAndCookNodes(Nodes):
         self.refrac_count -= self.dt
 
         # Check for spiking neurons.
-        self.s = self.v >= self.thresh + self.theta
+        self.s = self.v >= (self.thresh + self.theta)
 
         # Refractoriness, voltage reset, and adaptive thresholds.
         self.refrac_count.masked_fill_(self.s, self.refrac)
         self.v.masked_fill_(self.s, self.reset)
-        if self.learning:
-            self.theta += self.theta_plus * self.s.float().sum(0)
-
+        
+            
         # Choose only a single neuron to spike.
         if self.one_spike:
             if self.s.any():
@@ -1104,6 +1103,9 @@ class DiehlAndCookNodes(Nodes):
                 _any = _any.nonzero()
                 self.s.zero_()
                 self.s.view(self.batch_size, -1)[_any, ind] = 1
+        if self.learning:
+            if torch.sum(self.s.float().sum(0))>0:
+                self.theta += self.theta_plus * self.s.float().sum(0)
 
         # Voltage clipping to lower bound.
         if self.lbound is not None:
