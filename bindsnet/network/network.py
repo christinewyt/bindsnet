@@ -910,3 +910,138 @@ class Network(torch.nn.Module):
             if wmax_dopamin is not None and w_dop_exc.max()>wmax_dopamin:
                 w_dop_exc[w_dop_exc>wmax_dopamin] = wmax_dopamin
                 self.connections[c].norm_L2 = torch.sqrt((w_dop_exc**2).sum())
+
+    def run_dopamine_test(
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, n_spike = 5, Vth_step = 0.5, **kwargs
+        ) -> None:
+        # language=rst
+        assert type(inputs) == dict, (
+            "'inputs' must be a dict of names of layers "
+            + f"(str) and relevant input tensors. Got {type(inputs).__name__} instead."
+        )
+        # Parse keyword arguments.
+        clamps = kwargs.get("clamp", {})
+        unclamps = kwargs.get("unclamp", {})
+        masks = kwargs.get("masks", {})
+        injects_v = kwargs.get("injects_v", {})
+
+        # Compute reward.
+        if self.reward_fn is not None:
+            kwargs["reward"] = self.reward_fn.compute(**kwargs)
+
+        # Dynamic setting of batch size.
+        if inputs != {}:
+            for key in inputs:
+                # goal shape is [time, batch, n_0, ...]
+                if len(inputs[key].size()) == 1:
+                    # current shape is [n_0, ...]
+                    # unsqueeze twice to make [1, 1, n_0, ...]
+                    inputs[key] = inputs[key].unsqueeze(0).unsqueeze(0)
+                elif len(inputs[key].size()) == 2:
+                    # current shape is [time, n_0, ...]
+                    # unsqueeze dim 1 so that we have
+                    # [time, 1, n_0, ...]
+                    inputs[key] = inputs[key].unsqueeze(1)
+
+            for key in inputs:
+                # batch dimension is 1, grab this and use for batch size
+                if inputs[key].size(1) != self.batch_size:
+                    self.batch_size = inputs[key].size(1)
+                    for l in self.layers:
+                        self.layers[l].set_batch_size(self.batch_size)
+                    for m in self.monitors:
+                        self.monitors[m].reset_state_variables()
+                break
+
+        # Mark the number of spikes excitatory neurons have emitted
+        n_neuron = self.connections[('X', 'Ae')].w.shape[1]
+        device = self.connections[('X', 'Ae')].w.device
+        Flag_spike = n_spike*torch.ones((n_neuron), device = device)
+        
+        # Effective number of timesteps.
+        timesteps = int(time / self.dt)
+
+        # Simulate network activity until one neuron spikes num_dopamin_spike times.
+        # If detect dopamin spikes, reduce exc neuron threshold by Vth_step, and restart simulation from timestep=0.
+        t = 0
+        Vth_origin = getattr(self.layers['Ae'], 'thresh').clone()
+        while torch.min(Flag_spike)>0 and t<timesteps:
+          # Get input to all layers (synchronous mode).
+          current_inputs = {}
+          if not one_step:
+              current_inputs.update(self._get_inputs())
+
+          for l in self.layers:
+              # Update each layer of nodes.
+              if l in inputs:
+                  if l in current_inputs:
+                      current_inputs[l] += inputs[l][t]
+                  else:
+                      current_inputs[l] = inputs[l][t]
+
+              if one_step:
+                  # Get input to this layer (one-step mode).
+                  current_inputs.update(self._get_inputs(layers=[l]))
+
+              if l in current_inputs:
+                  self.layers[l].forward(x=current_inputs[l])
+              else:
+                  self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
+
+              # Check whether dopamin neuron fire or not
+              if l=='Dopamin':
+                # Get the spiking information
+                spikes_dop = getattr(self.monitors['Dopamin_spikes'].obj, "s").squeeze()
+                if spikes_dop==True and t>10 and torch.min(Flag_spike)>0:
+                    # If dopamin neuron spikes, reduce the threshold of exc neuron and restart simulation
+                    t = 0 
+                    Vth = getattr(self.layers['Ae'], 'thresh')
+                    Vth -= Vth_step
+                    # Reset state variables to restart simulation from time=0
+                    self.reset_state_variables()
+                    self.layers['Dopamin'].v *= 0.0 # Reset dopamin voltage to 0
+                    Flag_spike = n_spike*torch.ones((n_neuron), device = device)
+                    #print("Dopamine spike: reduce Vth to %.1f, restart simulation." %(getattr(self.layers['Ae'], 'thresh')))
+                    continue
+              if l=='Ae':
+                # Get the spiking information
+                if torch.min(Flag_spike)>0:
+                    spikes_exc = getattr(self.monitors['Ae_spikes'].obj, "s").squeeze()
+                    idx = torch.where(spikes_exc!=False)[0]
+                    if len(idx)>0:
+                        #print("exc spike time:", t, " neuron:", idx)
+                        #print(self.connections[('Dopamin', 'Ae')].w[0, 100])
+                        Flag_spike[idx] -= 1 
+                        
+                        
+              # Clamp neurons to spike.
+              clamp = clamps.get(l, None)
+              if clamp is not None:
+                  if clamp.ndimension() == 1:
+                      self.layers[l].s[:, clamp] = 1
+                  else:
+                      self.layers[l].s[:, clamp[t]] = 1
+
+              # Clamp neurons not to spike.
+              unclamp = unclamps.get(l, None)
+              if unclamp is not None:
+                  if unclamp.ndimension() == 1:
+                      self.layers[l].s[:, unclamp] = 0
+                  else:
+                      self.layers[l].s[:, unclamp[t]] = 0
+
+              # Inject voltage to neurons.
+              inject_v = injects_v.get(l, None)
+              if inject_v is not None:
+                  if inject_v.ndimension() == 1:
+                      self.layers[l].v += inject_v
+                  else:
+                      self.layers[l].v += inject_v[t]
+
+          # Record state variables of interest.
+          for m in self.monitors:
+              self.monitors[m].record()
+          t+=1
+
+        setattr(self.layers['Ae'], 'thresh', Vth_origin)
+        #print("Stop simulation, reset Vth=%.1f" %(getattr(self.layers['Ae'], 'thresh')))
